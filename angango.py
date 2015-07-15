@@ -24,7 +24,7 @@ class Angango(object):
                 yield 'data-' + attr
 
     def parse_ng_repeat(self):
-        PATTERN = re.compile(r'^\s*([a-zA-Z][a-zA-Z0-9_]*)\s+in\s+([a-zA-Z][a-zA-Z0-9_]*)\s*$')
+        PATTERN = re.compile(r'^\s*([a-zA-Z]\w*)\s+in\s+([a-zA-Z]\w*)\s*$')
         for attr in ['ng-repeat', 'data-ng-repeat']:
             for ele in self.d('[{}]'.format(attr)):
                 ele = pq(ele)
