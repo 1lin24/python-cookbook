@@ -7,11 +7,13 @@ Convert Angular template to Django template
 import re
 import uuid
 from pyquery import PyQuery as pq
-
+import lxml.html as lh
+import lxml.etree as le
 
 class Angango(object):
 
-    ATTR_BLACKLIST = ['ng-click', 'ng-class', 'ng-attr-class', 'edit-image', 'edit-text']
+    ATTR_BLACKLIST = ['ng-click', 'ng-class',
+                      'click-text', 'click-link', 'click-image', 'click-richtext', 'click-button']
     REPLACE_MAP = {}
 
     def __init__(self, html):
@@ -24,7 +26,7 @@ class Angango(object):
                 yield 'data-' + attr
 
     def parse_ng_repeat(self):
-        PATTERN = re.compile(r'^\s*([a-zA-Z]\w*)\s+in\s+([a-zA-Z]\w*)\s*$')
+        PATTERN = re.compile(r'^\s*([\S]+)\s+in\s+([\S]+)\s*$')
         for attr in ['ng-repeat', 'data-ng-repeat']:
             for ele in self.d('[{}]'.format(attr)):
                 ele = pq(ele)
@@ -72,7 +74,6 @@ class Angango(object):
         ele.attrib[code] = ''
         pq_ele.remove_attr(attr)
 
-
     def parse_ng_attr(self):
         for ele in self.d('*'):
             for attr in ele.attrib.keys():
@@ -89,27 +90,57 @@ class Angango(object):
                 ele.attrib['src'] = attr_value
                 pq_ele.remove_attr(attr)
 
+    def parse_ng_bind(self):
+        for attr in self._extend_attr(['ng-bind', 'ng-bind-html']):
+            for ele in self.d('[{}]'.format(attr)):
+                pq_ele = pq(ele)
+                attr_value = pq_ele.attr(attr)
+                dj_tpl = '{{{{ {} }}}}'.format(attr_value)
+                pq_ele.html(dj_tpl)
+                pq_ele.remove_attr(attr)
+
+
+    def parse_ng_class(self):
+        for attr in self._extend_attr(['ng-class']):
+            for ele in self.d('[{}]'.format(attr)):
+                pq_ele = pq(ele)
+                attr_value = pq_ele.attr(attr)
+                class_str = ele.attrib.get('class', '').split()
+                class_str = (',').join(class_str)
+                dj_tpl = """{{{{ {}|ngclass:'{}' }}}}""".format(attr_value, class_str)
+                ele.attrib['class'] = dj_tpl
 
     def remove_attr(self):
         for attr in self._extend_attr(self.ATTR_BLACKLIST):
             self.d('[{}]'.format(attr)).remove_attr(attr)
 
+    def remove_dom(self):
+        for attr in ['ag-remove']:
+            self.d('[{}]'.format(attr)).remove()
+
     def replace_code(self):
         html = unicode(self)
         for k, v in self.REPLACE_MAP.items():
             html = re.sub(k + r'=""', v, html)
+        # Fix <div/> -> <div></div>
+        # html = re.sub(r'<(\w+)([^/>]*)/>', r'<\1\2></\1>', html)
         return html
 
     def parse_all(self):
+        self.remove_dom()
         self.parse_ng_repeat()
         self.parse_ng_style()
         self.parse_ng_href()
         self.parse_ng_src()
+        self.parse_ng_bind()
         self.parse_ng_attr()
+        self.parse_ng_class()
         self.remove_attr()
         return self.replace_code()
 
     def __str__(self):
+        print le.tostring(self.d[0], encoding='utf-8', method='html')
+        print lh.tostring(self.d[0], encoding='utf-8', pretty_print=True, method="html")
         return unicode(self.d)
 
 
@@ -129,8 +160,17 @@ if __name__ == '__main__':
                     <img ng-src="{{ slide.components.image1.value|qiniu }}">
                 </a>
             </div>
+            <div ng-bind-html="item.text2.value|safe" class="simditor-typo2" ng-style="item.text2.style"></div>
+            <div class="s-root s-layout-a" ng-style="slide.style.root" ng-class="slide.class">
+                test ng-class
+            </div>
+
+            <div class="todo"></div>
+            <b></b>
+
+            <div class="serBoxOn" style="display: none;"/>
+
         </html>
         """
-    for i in range(100):
-        d = Angango(angular_template)
-        d.parse_all()
+    d = Angango(angular_template)
+    print d.parse_all()
